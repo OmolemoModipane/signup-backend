@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2');
+const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 const cors = require('cors');
 
@@ -19,6 +20,7 @@ const db = mysql.createConnection({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
 });
 
 db.connect(err => {
@@ -31,6 +33,9 @@ db.connect(err => {
 
 // JWT Secret Key
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+
+// Google OAuth2 Client
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Middleware to protect routes
 const authenticateToken = (req, res, next) => {
@@ -111,6 +116,59 @@ app.post('/login', async (req, res) => {
 
     res.json({ message: 'Login successful', token });
   });
+});
+
+// Route to handle Google Sign-In
+app.post('/auth/google', async (req, res) => {
+  const { token } = req.body;
+
+  try {
+    // Verify the Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    
+    const payload = ticket.getPayload();
+    const userId = payload['sub'];
+    const email = payload['email'];
+    const name = payload['name'];
+
+    // Check if the user exists in the database
+    db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
+      if (err) {
+        console.error('Database query error:', err);
+        return res.status(500).json({ message: 'Database error' });
+      }
+
+      if (results.length === 0) {
+        // If the user does not exist, insert them into the database
+        db.query(
+          'INSERT INTO users (name, email) VALUES (?, ?)',
+          [name, email],
+          (err, result) => {
+            if (err) {
+              console.error('Database insertion error:', err);
+              return res.status(500).json({ message: 'Database error' });
+            }
+
+            // Generate a token
+            const token = jwt.sign({ userId: result.insertId, email }, JWT_SECRET, { expiresIn: '1h' });
+
+            res.json({ message: 'User created and authenticated successfully', token });
+          }
+        );
+      } else {
+        // If the user exists, generate a token
+        const token = jwt.sign({ userId: results[0].id, email }, JWT_SECRET, { expiresIn: '1h' });
+
+        res.json({ message: 'User authenticated successfully', token });
+      }
+    });
+  } catch (error) {
+    console.error('Error during Google authentication:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
 });
 
 // Example of a protected route
