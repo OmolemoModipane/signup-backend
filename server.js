@@ -9,11 +9,11 @@ const cors = require('cors');
 const app = express();
 
 // Middleware
-
-
+app.use(express.json());
 app.use(cors({
-  origin: 'https://ruix-signup.vercel.app' // Correct domain without trailing slash
+  origin: 'https://ruix-signup.vercel.app' 
 }));
+
 
 // Database connection
 const db = mysql.createConnection({
