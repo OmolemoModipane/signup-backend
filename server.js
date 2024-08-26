@@ -11,7 +11,7 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: ['https://ruix-signup.vercel.app', 'http://localhost:3000'] // Multiple origins if needed
+  origin: ['https://ruix-signup.vercel.app', 'http://localhost:3000'] 
 }));
 
 // Database connection
